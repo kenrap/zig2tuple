@@ -10,19 +10,15 @@ const Dependency = struct {
 };
 
 pub fn entryContent(contents: []const u8, entry: []const u8) ?[]const u8 {
-    const index: usize = mem.indexOf(u8, contents, entry) orelse 0;
-    const start: usize = mem.indexOf(u8, contents[index + 1..], "\"") orelse 0;
-    const end: usize = mem.indexOf(u8, contents[index + start + 2..], "\"") orelse 0;
-    if (index == 0 or start == 0 or end == 0)
-        return null;
+    const index: usize = mem.indexOf(u8, contents, entry) orelse return null;
+    const start: usize = mem.indexOf(u8, contents[index + 1..], "\"") orelse return null;
+    const end: usize = mem.indexOf(u8, contents[index + start + 2..], "\"") orelse return null;
     return contents[index + start + 2..index + start + end + 2];
 }
 
 pub fn findDependency(slice: []const u8) ?struct { usize, Dependency } {
-    const dot = mem.indexOf(u8, slice, ".") orelse 0;
-    const afterName = mem.indexOf(u8, slice[dot..], " ") orelse 0;
-    if (dot == 0 and afterName == 0)
-        return null;
+    const dot = mem.indexOf(u8, slice, ".") orelse return null;
+    const afterName = mem.indexOf(u8, slice[dot..], " ") orelse return null;
 
     const open = mem.indexOf(u8, slice[dot + afterName + 1..], "{").?;
     const start = dot + afterName + open + 1;
@@ -32,15 +28,12 @@ pub fn findDependency(slice: []const u8) ?struct { usize, Dependency } {
     const url = entryContent(contents, ".url");
     const hash = entryContent(contents, ".hash");
     
-    if (url == null or hash == null)
-        return null;
-
     return .{
         start + close,
         Dependency {
             .name = slice[dot + 1..dot + afterName],
-            .url = url.?,
-            .hash = hash.?,
+            .url = url orelse return null,
+            .hash = hash orelse return null,
         },
     };
 }
