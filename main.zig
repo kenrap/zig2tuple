@@ -4,33 +4,34 @@ const ArrayList = std.ArrayList;
 const mem = std.mem;
 
 const Dependency = struct {
+    const Self = @This();
+
     name: []const u8,
     url: []const u8,
     hash: []const u8,
     _indexOffset: usize,
 
-    pub fn init(slice: []const u8) ?Dependency {
+    pub fn init(slice: []const u8) ?Self {
         const dot = mem.indexOf(u8, slice, ".") orelse return null;
-        const afterName = mem.indexOf(u8, slice[dot..], " ") orelse return null;
+        const afterName = (mem.indexOf(u8, slice[dot..], " ") orelse return null) + dot;
 
-        const open = mem.indexOf(u8, slice[dot + afterName + 1..], "{").?;
-        const start = dot + afterName + open + 1;
-        const close = mem.indexOf(u8, slice[start..], "}").?;
-        const contents = slice[start + 1..start + close];
+        const start = (mem.indexOf(u8, slice[afterName + 1..], "{") orelse return null) + afterName + 1;
+        const end = mem.indexOf(u8, slice[start..], "}") orelse return null;
+        const contents = slice[start..start + end];
 
-        return Dependency {
-            .name = slice[dot + 1..dot + afterName],
+        return Self {
+            .name = slice[dot + 1..afterName],
             .url = entry(contents, ".url") orelse return null,
             .hash = entry(contents, ".hash") orelse return null,
-            ._indexOffset = start + close,
+            ._indexOffset = start + end,
         };
     }
 
     fn entry(contents: []const u8, key: []const u8) ?[]const u8 {
         const index: usize = mem.indexOf(u8, contents, key) orelse return null;
-        const start: usize = (mem.indexOf(u8, contents[index + 1..], "\"") orelse return null) + index;
-        const end: usize = (mem.indexOf(u8, contents[start + 2..], "\"") orelse return null) + start;
-        return contents[start + 2..end + 2];
+        const start: usize = (mem.indexOf(u8, contents[index..], "\"") orelse return null) + index + 1;
+        const end: usize = (mem.indexOf(u8, contents[start..], "\"") orelse return null) + start;
+        return contents[start..end];
     }
 };
 
@@ -78,8 +79,8 @@ pub fn findDistfile(allocator: mem.Allocator, url: []const u8) ![]const u8 {
     }
     const index = mem.indexOf(u8, base, "#");
     var start: usize = 0;
-    if (index != null) {
-        start = index.? + 1;
+    if (index) |value| {
+        start = value + 1;
     }
     return try std.fmt.allocPrint(allocator, "{s}{s}", .{base[start..base.len - ext.len], ext});
 }
