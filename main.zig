@@ -3,6 +3,11 @@ const print = std.debug.print;
 const ArrayList = std.ArrayList;
 const mem = std.mem;
 
+const ProjectError = error {
+    MissingCommandArgument,
+    CannotFindDependencies,
+};
+
 const Dependency = struct {
     const Self = @This();
 
@@ -59,7 +64,7 @@ const DependencyIterator = struct {
 pub fn fileContents(allocator: mem.Allocator) ![]const u8 {
     var args = std.process.args();
     _ = args.skip();
-    const path = args.next().?;
+    const path = args.next() orelse return ProjectError.MissingCommandArgument;
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
     const stat = try file.stat();
@@ -100,8 +105,8 @@ pub fn main() !void {
     const contents = try fileContents(allocator);
     defer allocator.free(contents);
 
-    const depindex = mem.indexOf(u8, contents, ".dependencies").?;
-    const start = mem.indexOf(u8, contents[depindex..], "{").?;
+    const depindex = mem.indexOf(u8, contents, ".dependencies") orelse return ProjectError.CannotFindDependencies;
+    const start = mem.indexOf(u8, contents[depindex..], "{") orelse return ProjectError.CannotFindDependencies;
     const dependencies = contents[depindex + start..];
 
     print("ZIG_TUPLE=\t", .{});
