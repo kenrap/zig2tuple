@@ -4,7 +4,7 @@ const ArrayList = std.ArrayList;
 const mem = std.mem;
 
 const ProjectError = error {
-    MissingCommandArgument,
+    MissingFilePathArgument,
     CannotFindDependencies,
 };
 
@@ -21,14 +21,14 @@ const Dependency = struct {
         const afterName = (mem.indexOf(u8, slice[dot..], " ") orelse return null) + dot;
 
         const start = (mem.indexOf(u8, slice[afterName + 1..], "{") orelse return null) + afterName + 1;
-        const end = mem.indexOf(u8, slice[start..], "}") orelse return null;
-        const contents = slice[start..start + end];
+        const end = (mem.indexOf(u8, slice[start..], "}") orelse return null) + start;
+        const contents = slice[start..end];
 
         return Self {
             .name = slice[dot + 1..afterName],
             .hash = entry(contents, ".hash") orelse return null,
             ._url = entry(contents, ".url") orelse return null,
-            ._indexOffset = start + end,
+            ._indexOffset = end,
         };
     }
 
@@ -88,7 +88,7 @@ const DependencyIterator = struct {
 pub fn fileContents(allocator: mem.Allocator) ![]const u8 {
     var args = std.process.args();
     _ = args.skip();
-    const path = args.next() orelse return ProjectError.MissingCommandArgument;
+    const path = args.next() orelse return ProjectError.MissingFilePathArgument;
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
     const stat = try file.stat();
