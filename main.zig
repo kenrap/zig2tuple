@@ -12,8 +12,8 @@ const Dependency = struct {
     const Self = @This();
 
     name: []const u8,
-    url: []const u8,
     hash: []const u8,
+    _url: []const u8,
     _indexOffset: usize,
 
     pub fn init(slice: []const u8) ?Self {
@@ -26,10 +26,19 @@ const Dependency = struct {
 
         return Self {
             .name = slice[dot + 1..afterName],
-            .url = entry(contents, ".url") orelse return null,
             .hash = entry(contents, ".hash") orelse return null,
+            ._url = entry(contents, ".url") orelse return null,
             ._indexOffset = start + end,
         };
+    }
+
+    pub fn url(self: *const Self, allocator: mem.Allocator) ![]const u8 {
+        var index = mem.indexOf(u8, self._url, "://") orelse 0;
+        if (index != 0) index += 3;
+        const baseUrl = std.fs.path.dirname(self._url[index..]).?;
+        const file = try self.distfile(allocator);
+        defer allocator.free(file);
+        return try std.fmt.allocPrint(allocator, "{s}/{s}", .{baseUrl, file});
     }
 
     fn entry(contents: []const u8, key: []const u8) ?[]const u8 {
@@ -37,6 +46,21 @@ const Dependency = struct {
         const start: usize = (mem.indexOf(u8, contents[index..], "\"") orelse return null) + index + 1;
         const end: usize = (mem.indexOf(u8, contents[start..], "\"") orelse return null) + start;
         return contents[start..end];
+    }
+
+    fn distfile(self: *const Self, allocator: mem.Allocator) ![]const u8 {
+        const base = std.fs.path.basename(self._url);
+        const tarIndex = mem.lastIndexOf(u8, base, ".tar") orelse base.len;
+        var ext = base[tarIndex..];
+        if (ext.len == 0) {
+            ext = ".tar.gz";
+        }
+        const index = mem.indexOf(u8, base, "#");
+        var start: usize = 0;
+        if (index) |value| {
+            start = value + 1;
+        }
+        return try std.fmt.allocPrint(allocator, "{s}{s}", .{base[start..base.len - ext.len], ext});
     }
 };
 
@@ -71,34 +95,6 @@ pub fn fileContents(allocator: mem.Allocator) ![]const u8 {
     return try file.readToEndAlloc(allocator, stat.size);
 }
 
-pub fn tarExtension(path: []const u8) []const u8 {
-    const index = mem.lastIndexOf(u8, path, ".tar") orelse path.len;
-    return path[index..];
-}
-
-pub fn findDistfile(allocator: mem.Allocator, url: []const u8) ![]const u8 {
-    const base = std.fs.path.basename(url);
-    var ext = tarExtension(base);
-    if (ext.len == 0) {
-        ext = ".tar.gz";
-    }
-    const index = mem.indexOf(u8, base, "#");
-    var start: usize = 0;
-    if (index) |value| {
-        start = value + 1;
-    }
-    return try std.fmt.allocPrint(allocator, "{s}{s}", .{base[start..base.len - ext.len], ext});
-}
-
-pub fn processUrl(allocator: mem.Allocator, url: []const u8) ![]const u8 {
-    var index = mem.indexOf(u8, url, "://") orelse 0;
-    if (index != 0) index += 3;
-    const baseUrl = std.fs.path.dirname(url[index..]).?;
-    const distfile = try findDistfile(allocator, url);
-    defer allocator.free(distfile);
-    return try std.fmt.allocPrint(allocator, "{s}/{s}", .{baseUrl, distfile});
-}
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -113,7 +109,7 @@ pub fn main() !void {
     var newline = false;
     var iter = DependencyIterator.init(dependencies);
     while (iter.next()) |dep| {
-        const url = try processUrl(allocator, dep.url);
+        const url = try dep.url(allocator);
         defer allocator.free(url);
         if (newline) {
             print(" \\\n\t\t{s}:{s}:{s}", .{dep.name, url, dep.hash});
