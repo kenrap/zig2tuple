@@ -105,19 +105,20 @@ pub fn main() !void {
     const start = mem.indexOf(u8, contents[depindex..], "{") orelse return ProjectError.CannotFindDependencies;
     const dependencies = contents[depindex + start..];
 
-    print("ZIG_TUPLE=\t", .{});
     var newline = false;
     var iter = DependencyIterator.init(dependencies);
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("ZIG_TUPLE=\t", .{});
     while (iter.next()) |dep| {
         const url = try dep.url(allocator);
         defer allocator.free(url);
         if (newline) {
-            print(" \\\n\t\t{s}:{s}:{s}", .{dep.name, url, dep.hash});
+            try stdout.print(" \\\n\t\t{s}:{s}:{s}", .{dep.name, url, dep.hash});
         }
         else {
-            print("{s}:{s}:{s}", .{dep.name, url, dep.hash});
+            try stdout.print("{s}:{s}:{s}", .{dep.name, url, dep.hash});
         }
         newline = true;
     }
-    print("\n", .{});
+    try stdout.print("\n", .{});
 }
