@@ -20,15 +20,16 @@ const Dependency = struct {
     _indexOffset: usize,
 
     pub fn init(slice: []const u8) ?Self {
-        const dot = mem.indexOf(u8, slice, ".") orelse return null;
-        const afterName = (mem.indexOf(u8, slice[dot..], " ") orelse return null) + dot;
+        const entryOpen = mem.indexOf(u8, slice, ".{") orelse return null;
+        const beforeName = mem.lastIndexOf(u8, slice[0..entryOpen], ".") orelse return null;
+        const afterName = (mem.indexOf(u8, slice[beforeName..], " ") orelse return null) + beforeName;
 
-        const start = (mem.indexOf(u8, slice[afterName + 1..], "{") orelse return null) + afterName + 1;
+        const start = entryOpen + 2;
         const end = (mem.indexOf(u8, slice[start..], "}") orelse return null) + start;
         const contents = slice[start..end];
 
         return Self {
-            .name = slice[dot + 1..afterName],
+            .name = slice[beforeName + 1..afterName],
             .hash = entry(contents, ".hash") orelse return null,
             ._url = entry(contents, ".url") orelse return null,
             ._indexOffset = end,
@@ -90,30 +91,31 @@ const ZonIterator = struct {
     const Self = @This();
 
     dir: fs.Dir,
-    dirIter: fs.Dir.Iterator,
+    _iter: fs.Dir.Walker,
 
-    pub fn init() !Self {
+    pub fn init(allocator: mem.Allocator) !Self {
         var args = std.process.args();
         _ = args.skip();
         const path = args.next() orelse return ProjectError.MissingDirPathArgument;
         var dir = try std.fs.cwd().openDir(path, .{});
         return .{
             .dir = dir,
-            .dirIter = dir.iterate(),
+            ._iter = try dir.walk(allocator),
         };
     }
     
     pub fn deinit(self: *Self) void {
         self.dir.close();
+        self._iter.deinit();
     }
 
     pub fn next(self: *Self) !?fs.File {
-        while (try self.dirIter.next()) |entry| {
+        while (try self._iter.next()) |entry| {
             if (entry.kind != std.fs.File.Kind.file)
                 continue;
-            if (!mem.eql(u8, fs.path.extension(entry.name), ".zon"))
+            if (!mem.eql(u8, fs.path.extension(entry.path), ".zon"))
                 continue;
-            return try self.dir.openFile(entry.name, .{});
+            return try self.dir.openFile(entry.path, .{});
         }
         return null;
     }
@@ -128,7 +130,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     var lines = ArrayList([]const u8).init(allocator);
-    var zonIter = try ZonIterator.init();
+    var zonIter = try ZonIterator.init(allocator);
     defer lines.deinit();
     defer zonIter.deinit();
     while (try zonIter.next()) |file| {
