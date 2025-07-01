@@ -37,8 +37,9 @@ const Dependency = struct {
 
     pub fn url(self: *const Self, allocator: mem.Allocator) ![]const u8 {
         var index = mem.indexOf(u8, self._url, "://") orelse 0;
-        if (index != 0) index += 3;
-        const baseUrl = std.fs.path.dirname(self._url[index..]).?;
+        if (index != 0)
+            index += 3;
+        const baseUrl = fs.path.dirname(self._url[index..]).?;
         const file = try self.distfile(allocator);
         defer allocator.free(file);
         return try fmt.allocPrint(allocator, "{s}/{s}", .{baseUrl, file});
@@ -52,17 +53,14 @@ const Dependency = struct {
     }
 
     fn distfile(self: *const Self, allocator: mem.Allocator) ![]const u8 {
-        const base = std.fs.path.basename(self._url);
+        const base = fs.path.basename(self._url);
         const tarIndex = mem.lastIndexOf(u8, base, ".tar") orelse base.len;
         var ext = base[tarIndex..];
-        if (ext.len == 0) {
+        if (ext.len == 0)
             ext = ".tar.gz";
-        }
-        const index = mem.indexOf(u8, base, "#");
         var start: usize = 0;
-        if (index) |value| {
-            start = value + 1;
-        }
+        if (mem.indexOf(u8, base, "#")) |hashOffset|
+            start = hashOffset + 1;
         return try fmt.allocPrint(allocator, "{s}{s}", .{base[start..base.len - ext.len], ext});
     }
 };
@@ -151,9 +149,8 @@ pub fn main() !void {
         }
     }
 
-    if (lines.items.len == 0) {
+    if (lines.items.len == 0)
         return;
-    }
 
     mem.sort([]const u8, lines.items, {}, stringLessThan);
     const stdout = std.io.getStdOut().writer();
