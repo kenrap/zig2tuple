@@ -59,10 +59,9 @@ const Dependency = struct {
         var ext = base[tarIndex..];
         if (ext.len == 0)
             ext = ".tar.gz";
-        var start: usize = 0;
-        if (mem.indexOf(u8, base, "#")) |hashOffset|
-            start = hashOffset + 1;
-        return try fmt.allocPrint(allocator, "{s}{s}", .{base[start..base.len - ext.len], ext});
+        if (mem.indexOf(u8, base, "#")) |hash|
+            return try fmt.allocPrint(allocator, "{s}/archive/{s}{s}", .{base[0..hash], base[hash + 1..base.len - ext.len], ext});
+        return try fmt.allocPrint(allocator, "{s}{s}", .{base[0..base.len - ext.len], ext});
     }
 };
 
