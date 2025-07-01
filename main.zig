@@ -1,10 +1,13 @@
 const std = @import("std");
-const print = std.debug.print;
-const ArrayList = std.ArrayList;
+const fmt = std.fmt;
+const fs = std.fs;
 const mem = std.mem;
+const print = std.debug.print;
+
+const ArrayList = std.ArrayList;
 
 const ProjectError = error {
-    MissingFilePathArgument,
+    MissingDirPathArgument,
     CannotFindDependencies,
 };
 
@@ -38,7 +41,7 @@ const Dependency = struct {
         const baseUrl = std.fs.path.dirname(self._url[index..]).?;
         const file = try self.distfile(allocator);
         defer allocator.free(file);
-        return try std.fmt.allocPrint(allocator, "{s}/{s}", .{baseUrl, file});
+        return try fmt.allocPrint(allocator, "{s}/{s}", .{baseUrl, file});
     }
 
     fn entry(contents: []const u8, key: []const u8) ?[]const u8 {
@@ -60,7 +63,7 @@ const Dependency = struct {
         if (index) |value| {
             start = value + 1;
         }
-        return try std.fmt.allocPrint(allocator, "{s}{s}", .{base[start..base.len - ext.len], ext});
+        return try fmt.allocPrint(allocator, "{s}{s}", .{base[start..base.len - ext.len], ext});
     }
 };
 
@@ -85,40 +88,78 @@ const DependencyIterator = struct {
     }
 };
 
-pub fn fileContents(allocator: mem.Allocator) ![]const u8 {
-    var args = std.process.args();
-    _ = args.skip();
-    const path = args.next() orelse return ProjectError.MissingFilePathArgument;
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-    const stat = try file.stat();
-    return try file.readToEndAlloc(allocator, stat.size);
+const ZonIterator = struct {
+    const Self = @This();
+
+    dir: fs.Dir,
+    dirIter: fs.Dir.Iterator,
+
+    pub fn init() !Self {
+        var args = std.process.args();
+        _ = args.skip();
+        const path = args.next() orelse return ProjectError.MissingDirPathArgument;
+        var dir = try std.fs.cwd().openDir(path, .{});
+        return .{
+            .dir = dir,
+            .dirIter = dir.iterate(),
+        };
+    }
+    
+    pub fn deinit(self: *Self) void {
+        self.dir.close();
+    }
+
+    pub fn next(self: *Self) !?fs.File {
+        while (try self.dirIter.next()) |entry| {
+            if (entry.kind != std.fs.File.Kind.file)
+                continue;
+            if (!mem.eql(u8, fs.path.extension(entry.name), ".zon"))
+                continue;
+            return try self.dir.openFile(entry.name, .{});
+        }
+        return null;
+    }
+};
+
+fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
+    return std.mem.order(u8, lhs, rhs) == .lt;
 }
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    const contents = try fileContents(allocator);
-    defer allocator.free(contents);
 
-    const depindex = mem.indexOf(u8, contents, ".dependencies") orelse return ProjectError.CannotFindDependencies;
-    const start = mem.indexOf(u8, contents[depindex..], "{") orelse return ProjectError.CannotFindDependencies;
-    const dependencies = contents[depindex + start..];
+    var lines = ArrayList([]const u8).init(allocator);
+    var zonIter = try ZonIterator.init();
+    defer lines.deinit();
+    defer zonIter.deinit();
+    while (try zonIter.next()) |file| {
+        const stat = try file.stat();
+        const contents = try file.readToEndAlloc(allocator, stat.size);
+        defer allocator.free(contents);
 
-    var newline = false;
-    var iter = DependencyIterator.init(dependencies);
+        const depindex = mem.indexOf(u8, contents, ".dependencies") orelse return ProjectError.CannotFindDependencies;
+        const start = mem.indexOf(u8, contents[depindex..], "{") orelse return ProjectError.CannotFindDependencies;
+        const deps = contents[depindex + start..];
+
+        var depIter = DependencyIterator.init(deps);
+        while (depIter.next()) |dep| {
+            const url = try dep.url(allocator);
+            defer allocator.free(url);
+            const line = try fmt.allocPrint(allocator, "{s}:{s}:{s}", .{dep.name, url, dep.hash});
+            try lines.append(line);
+        }
+    }
+
+    if (lines.items.len == 0) {
+        return;
+    }
+
+    mem.sort([]const u8, lines.items, {}, stringLessThan);
     const stdout = std.io.getStdOut().writer();
-    try stdout.print("ZIG_TUPLE=\t", .{});
-    while (iter.next()) |dep| {
-        const url = try dep.url(allocator);
-        defer allocator.free(url);
-        if (newline) {
-            try stdout.print(" \\\n\t\t{s}:{s}:{s}", .{dep.name, url, dep.hash});
-        }
-        else {
-            try stdout.print("{s}:{s}:{s}", .{dep.name, url, dep.hash});
-        }
-        newline = true;
+    try stdout.print("ZIG_TUPLE=\t{s}", .{lines.items[0]});
+    for (lines.items[1..]) |line| {
+        try stdout.print(" \\\n\t\t{s}", .{line});
     }
     try stdout.print("\n", .{});
 }
