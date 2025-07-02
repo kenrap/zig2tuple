@@ -124,6 +124,19 @@ fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
     return std.mem.order(u8, lhs, rhs) == .lt;
 }
 
+fn hasSameItem(comptime T: type, list: []T, query: T) bool {
+    for (list[0..]) |item| {
+        const typeInfo = @typeInfo(T);
+        if (comptime typeInfo.pointer.size == .slice) {
+            if (mem.eql(typeInfo.pointer.child, item, query))
+                return true;
+        }
+        else if (item == query)
+            return true;
+    }
+    return false;
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -146,6 +159,8 @@ pub fn main() !void {
             const url = try dep.url(allocator);
             defer allocator.free(url);
             const line = try fmt.allocPrint(allocator, "{s}:{s}:{s}", .{dep.name, url, dep.hash});
+            if (hasSameItem([]const u8, lines.items, line))
+                continue;
             try lines.append(line);
         }
     }
