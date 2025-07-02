@@ -137,8 +137,8 @@ pub fn main() !void {
         const contents = try file.readToEndAlloc(allocator, stat.size);
         defer allocator.free(contents);
 
-        const depindex = mem.indexOf(u8, contents, ".dependencies") orelse return ProjectError.CannotFindDependencies;
-        const start = mem.indexOf(u8, contents[depindex..], "{") orelse return ProjectError.CannotFindDependencies;
+        const depindex = mem.indexOf(u8, contents, ".dependencies") orelse continue;
+        const start = mem.indexOf(u8, contents[depindex..], "{") orelse continue;
         const deps = contents[depindex + start..];
 
         var depIter = DependencyIterator.init(deps);
@@ -151,7 +151,7 @@ pub fn main() !void {
     }
 
     if (lines.items.len == 0)
-        return;
+        return ProjectError.CannotFindDependencies;
 
     mem.sort([]const u8, lines.items, {}, stringLessThan);
     const stdout = std.io.getStdOut().writer();
