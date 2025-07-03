@@ -15,8 +15,8 @@ const Dependency = struct {
     const Self = @This();
 
     name: []const u8,
-    hash: []const u8,
-    _url: []const u8,
+    hash: ?[]const u8,
+    _url: ?[]const u8,
     _indexOffset: usize,
 
     pub fn init(slice: []const u8) ?Self {
@@ -30,18 +30,19 @@ const Dependency = struct {
 
         return Self {
             .name = slice[beforeName + 1..afterName],
-            .hash = entry(contents, ".hash") orelse return null,
-            ._url = entry(contents, ".url") orelse return null,
+            .hash = entry(contents, ".hash"),
+            ._url = entry(contents, ".url"),
             ._indexOffset = end,
         };
     }
 
-    pub fn url(self: *const Self, allocator: mem.Allocator) ![]const u8 {
-        var index = mem.indexOf(u8, self._url, "://") orelse 0;
+    pub fn url(self: *const Self, allocator: mem.Allocator) !?[]const u8 {
+        const _url = self._url orelse return null;
+        var index = mem.indexOf(u8, _url, "://") orelse 0;
         if (index != 0)
             index += 3;
-        const baseUrl = fs.path.dirname(self._url[index..]).?;
-        const file = try self.distfile(allocator);
+        const baseUrl = fs.path.dirname(_url[index..]).?;
+        const file = try distfile(allocator, _url);
         defer allocator.free(file);
         return try fmt.allocPrint(allocator, "{s}/{s}", .{baseUrl, file});
     }
@@ -53,8 +54,8 @@ const Dependency = struct {
         return contents[start..end];
     }
 
-    fn distfile(self: *const Self, allocator: mem.Allocator) ![]const u8 {
-        const base = fs.path.basename(self._url);
+    fn distfile(allocator: mem.Allocator, _url: []const u8) ![]const u8 {
+        const base = fs.path.basename(_url);
         const tarIndex = mem.lastIndexOf(u8, base, ".tar") orelse base.len;
         var ext = base[tarIndex..];
         if (ext.len == 0)
@@ -156,9 +157,10 @@ pub fn main() !void {
 
         var depIter = DependencyIterator.init(deps);
         while (depIter.next()) |dep| {
-            const url = try dep.url(allocator);
+            const url = try dep.url(allocator) orelse continue;
+            const hash = dep.hash orelse continue;
             defer allocator.free(url);
-            const line = try fmt.allocPrint(allocator, "{s}:{s}:{s}", .{dep.name, url, dep.hash});
+            const line = try fmt.allocPrint(allocator, "{s}:{s}:{s}", .{dep.name, url, hash});
             if (hasSameItem([]const u8, lines.items, line))
                 continue;
             try lines.append(line);
