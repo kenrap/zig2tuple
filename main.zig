@@ -56,7 +56,7 @@ const Dependency = struct {
 
     fn distfile(allocator: mem.Allocator, _url: []const u8) ![]const u8 {
         const base = fs.path.basename(_url);
-        const tarIndex = mem.lastIndexOf(u8, base, ".tar") orelse base.len;
+        const tarIndex = mem.lastIndexOf(u8, base, ".tar") orelse mem.lastIndexOf(u8, base, ".tgz") orelse base.len;
         var ext = base[tarIndex..];
         if (ext.len == 0)
             ext = ".tar.gz";
