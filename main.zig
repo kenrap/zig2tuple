@@ -56,10 +56,22 @@ const Dependency = struct {
 
     fn distfile(allocator: mem.Allocator, _url: []const u8) ![]const u8 {
         const base = fs.path.basename(_url);
-        const tarIndex = mem.lastIndexOf(u8, base, ".tar") orelse mem.lastIndexOf(u8, base, ".tgz") orelse base.len;
-        var ext = base[tarIndex..];
-        if (ext.len == 0)
-            ext = ".tar.gz";
+        const tarball_checks = [_][]const u8{
+            ".tar",
+            ".gz",
+            ".xz",
+            ".bz2",
+            ".tgz",
+            ".txz",
+            ".tbz",
+        };
+        var ext: []const u8 = ".tar.gz"; // Default extension
+        for (tarball_checks[0..]) |tarball| {
+            if (mem.lastIndexOf(u8, base, tarball)) |index| {
+                ext = base[index..];
+                break;
+            }
+        }
         if (mem.indexOf(u8, base, "#")) |hash|
             return try fmt.allocPrint(allocator, "{s}/archive/{s}{s}", .{base[0..hash], base[hash + 1..base.len - ext.len], ext});
         return try fmt.allocPrint(allocator, "{s}{s}", .{base[0..base.len - ext.len], ext});
