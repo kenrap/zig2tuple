@@ -154,9 +154,9 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    var lines = ArrayList([]const u8).init(allocator);
+    var lines = try ArrayList([]const u8).initCapacity(allocator, 32);
     var zonIter = try ZonIterator.init(allocator);
-    defer lines.deinit();
+    defer lines.deinit(allocator);
     defer zonIter.deinit();
     while (try zonIter.next()) |file| {
         const stat = try file.stat();
@@ -175,7 +175,7 @@ pub fn main() !void {
             const line = try fmt.allocPrint(allocator, "{s}:{s}:{s}", .{dep.name, url, hash});
             if (hasSameItem([]const u8, lines.items, line))
                 continue;
-            try lines.append(line);
+            try lines.append(allocator, line);
         }
     }
 
@@ -183,10 +183,13 @@ pub fn main() !void {
         return ProjectError.CannotFindDependencies;
 
     mem.sort([]const u8, lines.items, {}, stringLessThan);
-    const stdout = std.io.getStdOut().writer();
+    var stdout_buffer: [1024 * 8]u8 = undefined;
+    var stdout_writer = fs.File.stdout().writer(&stdout_buffer);
+    var stdout = &stdout_writer.interface;
     try stdout.print("ZIG_TUPLE=\t{s}", .{lines.items[0]});
     for (lines.items[1..]) |line| {
         try stdout.print(" \\\n\t\t{s}", .{line});
     }
     try stdout.print("\n", .{});
+    try stdout.flush();
 }
