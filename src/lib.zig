@@ -6,7 +6,7 @@ const print = std.debug.print;
 
 const ArrayList = std.ArrayList;
 
-pub const ProjectError = error {
+pub const ProjectError = error{
     MissingDirPathArgument,
     CannotFindDependencies,
 };
@@ -18,27 +18,27 @@ pub const Dependency = struct {
     hash: ?[]const u8,
     _url: ?[]const u8,
 
-    pub fn init(slice: []const u8) struct { value: ?Self, indexOffset: ?usize } {
-        const entryOpen = mem.indexOf(u8, slice, ".{") orelse return .{ .value = null, .indexOffset = null };
-        const start = entryOpen + 2;
-        const end = (mem.indexOf(u8, slice[start..], "}") orelse return .{ .value = null, .indexOffset = null }) + start;
+    pub fn init(slice: []const u8) struct { value: ?Self, index_offset: ?usize } {
+        const entry_open = mem.indexOf(u8, slice, ".{") orelse return .{ .value = null, .index_offset = null };
+        const start = entry_open + 2;
+        const end = (mem.indexOf(u8, slice[start..], "}") orelse return .{ .value = null, .index_offset = null }) + start;
 
-        const priorNewline = mem.lastIndexOf(u8, slice[0..entryOpen], "\n") orelse return .{ .value = null, .indexOffset = end };
-        const lineComment = mem.lastIndexOf(u8, slice[priorNewline..entryOpen], "//");
-        if (lineComment != null) {
-            return .{ .value = null, .indexOffset = end };
+        const prior_newline = mem.lastIndexOf(u8, slice[0..entry_open], "\n") orelse return .{ .value = null, .index_offset = end };
+        const comment = mem.lastIndexOf(u8, slice[prior_newline..entry_open], "//");
+        if (comment != null) {
+            return .{ .value = null, .index_offset = end };
         }
 
         const contents = slice[start..end];
-        const beforeName = mem.lastIndexOf(u8, slice[0..entryOpen], ".") orelse return .{ .value = null, .indexOffset = end };
-        const afterName = (mem.indexOf(u8, slice[beforeName..], " ") orelse return .{ .value = null, .indexOffset = end }) + beforeName;
+        const before_name = mem.lastIndexOf(u8, slice[0..entry_open], ".") orelse return .{ .value = null, .index_offset = end };
+        const after_name = (mem.indexOf(u8, slice[before_name..], " ") orelse return .{ .value = null, .index_offset = end }) + before_name;
 
-        const value = Self {
-            .name = slice[beforeName + 1..afterName],
+        const value = Self{
+            .name = slice[before_name + 1 .. after_name],
             .hash = entry(contents, ".hash"),
             ._url = entry(contents, ".url"),
         };
-        return .{ .value = value, .indexOffset = end };
+        return .{ .value = value, .index_offset = end };
     }
 
     pub fn url(self: *const Self, allocator: mem.Allocator) !?[]const u8 {
@@ -46,10 +46,10 @@ pub const Dependency = struct {
         var index = mem.indexOf(u8, _url, "://") orelse 0;
         if (index != 0)
             index += 3;
-        const baseUrl = fs.path.dirname(_url[index..]).?;
+        const base_url = fs.path.dirname(_url[index..]).?;
         const file = try distfile(allocator, _url);
         defer allocator.free(file);
-        return try fmt.allocPrint(allocator, "{s}/{s}", .{baseUrl, file});
+        return try fmt.allocPrint(allocator, "{s}/{s}", .{ base_url, file });
     }
 
     fn entry(contents: []const u8, key: []const u8) ?[]const u8 {
@@ -78,8 +78,8 @@ pub const Dependency = struct {
             }
         }
         if (mem.indexOf(u8, base, "#")) |hash|
-            return try fmt.allocPrint(allocator, "{s}/archive/{s}{s}", .{base[0..hash], base[hash + 1..base.len - ext.len], ext});
-        return try fmt.allocPrint(allocator, "{s}{s}", .{base[0..base.len - ext.len], ext});
+            return try fmt.allocPrint(allocator, "{s}/archive/{s}{s}", .{ base[0..hash], base[hash + 1 .. base.len - ext.len], ext });
+        return try fmt.allocPrint(allocator, "{s}{s}", .{ base[0 .. base.len - ext.len], ext });
     }
 };
 
@@ -97,20 +97,20 @@ pub const DependencyIterator = struct {
     }
 
     pub fn next(self: *Self) ?Dependency {
-        var slice = self.buffer[self.index + 1..];
+        var slice = self.buffer[self.index + 1 ..];
         var dep = Dependency.init(slice);
 
         if (dep.value == null) {
-            self.index += dep.indexOffset orelse return null;
+            self.index += dep.index_offset orelse return null;
             while (dep.value == null) {
-                slice = self.buffer[self.index + 1..];
+                slice = self.buffer[self.index + 1 ..];
                 dep = Dependency.init(slice);
-                if (dep.value == null and dep.indexOffset == null) return null;
-                self.index += dep.indexOffset.?;
+                if (dep.value == null and dep.index_offset == null) return null;
+                self.index += dep.index_offset.?;
             }
         }
         else {
-            self.index += dep.indexOffset orelse return null;
+            self.index += dep.index_offset orelse return null;
         }
 
         return dep.value orelse return null;
@@ -133,7 +133,7 @@ pub const ZonIterator = struct {
             ._iter = try dir.walk(allocator),
         };
     }
-    
+
     pub fn deinit(self: *Self) void {
         self.dir.close();
         self._iter.deinit();
@@ -157,9 +157,9 @@ pub fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
 
 pub fn hasSameItem(comptime T: type, list: []T, query: T) bool {
     for (list[0..]) |item| {
-        const typeInfo = @typeInfo(T);
-        if (comptime typeInfo.pointer.size == .slice) {
-            if (mem.eql(typeInfo.pointer.child, item, query))
+        const type_info = @typeInfo(T);
+        if (comptime type_info.pointer.size == .slice) {
+            if (mem.eql(type_info.pointer.child, item, query))
                 return true;
         }
         else if (item == query)

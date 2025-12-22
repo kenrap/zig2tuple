@@ -12,24 +12,24 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     var lines = try ArrayList([]const u8).initCapacity(allocator, 32);
-    var zonIter = try lib.ZonIterator.init(allocator);
+    var zon_iter = try lib.ZonIterator.init(allocator);
     defer lines.deinit(allocator);
-    defer zonIter.deinit();
-    while (try zonIter.next()) |file| {
+    defer zon_iter.deinit();
+    while (try zon_iter.next()) |file| {
         const stat = try file.stat();
         const contents = try file.readToEndAlloc(allocator, stat.size);
         defer allocator.free(contents);
 
-        const depindex = mem.indexOf(u8, contents, ".dependencies") orelse continue;
-        const start = mem.indexOf(u8, contents[depindex..], "{") orelse continue;
-        const deps = contents[depindex + start..];
+        const dep_index = mem.indexOf(u8, contents, ".dependencies") orelse continue;
+        const start = mem.indexOf(u8, contents[dep_index..], "{") orelse continue;
+        const deps = contents[dep_index + start ..];
 
-        var depIter = lib.DependencyIterator.init(deps);
-        while (depIter.next()) |dep| {
+        var dep_iter = lib.DependencyIterator.init(deps);
+        while (dep_iter.next()) |dep| {
             const url = try dep.url(allocator) orelse continue;
             const hash = dep.hash orelse continue;
             defer allocator.free(url);
-            const line = try fmt.allocPrint(allocator, "{s}:{s}:{s}", .{dep.name, url, hash});
+            const line = try fmt.allocPrint(allocator, "{s}:{s}:{s}", .{ dep.name, url, hash });
             if (lib.hasSameItem([]const u8, lines.items, line))
                 continue;
             try lines.append(allocator, line);
