@@ -7,8 +7,9 @@ const ArrayList = std.ArrayList;
 const lib = @import("lib.zig");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
     var lines = try ArrayList([]const u8).initCapacity(allocator, 32);
     var zonIter = try lib.ZonIterator.init(allocator);
