@@ -17,23 +17,28 @@ pub const Dependency = struct {
     name: []const u8,
     hash: ?[]const u8,
     _url: ?[]const u8,
-    _indexOffset: usize,
 
-    pub fn init(slice: []const u8) ?Self {
-        const entryOpen = mem.indexOf(u8, slice, ".{") orelse return null;
-        const beforeName = mem.lastIndexOf(u8, slice[0..entryOpen], ".") orelse return null;
-        const afterName = (mem.indexOf(u8, slice[beforeName..], " ") orelse return null) + beforeName;
-
+    pub fn init(slice: []const u8) struct { value: ?Self, indexOffset: ?usize } {
+        const entryOpen = mem.indexOf(u8, slice, ".{") orelse return .{ .value = null, .indexOffset = null };
         const start = entryOpen + 2;
-        const end = (mem.indexOf(u8, slice[start..], "}") orelse return null) + start;
-        const contents = slice[start..end];
+        const end = (mem.indexOf(u8, slice[start..], "}") orelse return .{ .value = null, .indexOffset = null }) + start;
 
-        return Self {
+        const priorNewline = mem.lastIndexOf(u8, slice[0..entryOpen], "\n") orelse return .{ .value = null, .indexOffset = end };
+        const lineComment = mem.lastIndexOf(u8, slice[priorNewline..entryOpen], "//");
+        if (lineComment != null) {
+            return .{ .value = null, .indexOffset = end };
+        }
+
+        const contents = slice[start..end];
+        const beforeName = mem.lastIndexOf(u8, slice[0..entryOpen], ".") orelse return .{ .value = null, .indexOffset = end };
+        const afterName = (mem.indexOf(u8, slice[beforeName..], " ") orelse return .{ .value = null, .indexOffset = end }) + beforeName;
+
+        const value = Self {
             .name = slice[beforeName + 1..afterName],
             .hash = entry(contents, ".hash"),
             ._url = entry(contents, ".url"),
-            ._indexOffset = end,
         };
+        return .{ .value = value, .indexOffset = end };
     }
 
     pub fn url(self: *const Self, allocator: mem.Allocator) !?[]const u8 {
@@ -92,10 +97,23 @@ pub const DependencyIterator = struct {
     }
 
     pub fn next(self: *Self) ?Dependency {
-        const slice = self.buffer[self.index + 1..];
-        const dep = Dependency.init(slice) orelse return null;
-        self.index += dep._indexOffset;
-        return dep;
+        var slice = self.buffer[self.index + 1..];
+        var dep = Dependency.init(slice);
+
+        if (dep.value == null) {
+            self.index += dep.indexOffset orelse return null;
+            while (dep.value == null) {
+                slice = self.buffer[self.index + 1..];
+                dep = Dependency.init(slice);
+                if (dep.value == null and dep.indexOffset == null) return null;
+                self.index += dep.indexOffset.?;
+            }
+        }
+        else {
+            self.index += dep.indexOffset orelse return null;
+        }
+
+        return dep.value orelse return null;
     }
 };
 
