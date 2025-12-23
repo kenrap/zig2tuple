@@ -70,7 +70,7 @@ pub const Dependency = struct {
             ".txz",
             ".tbz",
         };
-        var ext: []const u8 = "";
+        var ext: []const u8 = ".tar.gz"; // Default extension
         for (tarball_checks[0..]) |tarball| {
             if (mem.lastIndexOf(u8, base, tarball)) |index| {
                 ext = base[index..];

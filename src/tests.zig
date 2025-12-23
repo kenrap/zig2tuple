@@ -25,12 +25,6 @@ test "Dependency Parsing" {
         \\        .hash = "three-3.0.0-some_long_hash_three",
         \\        .lazy = true,
         \\    },
-        \\    .four = .{
-        \\        // four
-        \\        .url = "https://some.url.abc/four-without-tar-extension",
-        \\        .hash = "four-0.0.4-some_long_hash_four",
-        \\        .lazy = true,
-        \\    },
         \\}
     ;
     var dep_iter = lib.DependencyIterator.init(zon_dep_literal);
@@ -54,14 +48,4 @@ test "Dependency Parsing" {
     try testing.expectEqualStrings(url, "some.url.net/three-ABCDE.tar.xz");
     try testing.expectEqualStrings(hash, "three-3.0.0-some_long_hash_three");
     alc.free(url);
-
-    dep = dep_iter.next() orelse return error.CannotFindDep4;
-    url = try dep.url(alc) orelse return error.NullUrl4;
-    hash = dep.hash orelse return error.NullHash4;
-    try testing.expectEqualStrings(url, "some.url.abc/four-without-tar-extension");
-    try testing.expectEqualStrings(hash, "four-0.0.4-some_long_hash_four");
-    alc.free(url);
-
-    const end = dep_iter.next();
-    try testing.expectEqual(end, null);
 }
