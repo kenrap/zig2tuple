@@ -41,25 +41,8 @@ pub const Dependency = struct {
         return .{ .value = value, .index_offset = end };
     }
 
-    pub fn url(self: *const Self, allocator: mem.Allocator) !?[]const u8 {
+    fn findDistfile(self: *const Self) ?struct{ base: []const u8, ext: []const u8} {
         const _url = self._url orelse return null;
-        var index = mem.indexOf(u8, _url, "://") orelse 0;
-        if (index != 0)
-            index += 3;
-        const base_url = fs.path.dirname(_url[index..]).?;
-        const file = try distfile(allocator, _url);
-        defer allocator.free(file);
-        return try fmt.allocPrint(allocator, "{s}/{s}", .{ base_url, file });
-    }
-
-    fn entry(contents: []const u8, key: []const u8) ?[]const u8 {
-        const index: usize = mem.indexOf(u8, contents, key) orelse return null;
-        const start: usize = (mem.indexOf(u8, contents[index..], "\"") orelse return null) + index + 1;
-        const end: usize = (mem.indexOf(u8, contents[start..], "\"") orelse return null) + start;
-        return contents[start..end];
-    }
-
-    fn distfile(allocator: mem.Allocator, _url: []const u8) ![]const u8 {
         const base = fs.path.basename(_url);
         const tarball_checks = [_][]const u8{
             ".tar",
@@ -77,9 +60,34 @@ pub const Dependency = struct {
                 break;
             }
         }
-        if (mem.indexOf(u8, base, "#")) |hash|
-            return try fmt.allocPrint(allocator, "{s}/archive/{s}{s}", .{ base[0..hash], base[hash + 1 .. base.len - ext.len], ext });
-        return try fmt.allocPrint(allocator, "{s}{s}", .{ base[0 .. base.len - ext.len], ext });
+        var len: usize = base.len;
+        if (len > ext.len) {
+            len -= ext.len;
+        }
+        return .{ .base = base[0 .. len], .ext = ext };
+    }
+
+    fn findHostUrl(self: *const Self) ?[]const u8 {
+        const _url = self._url orelse return null;
+        var index = mem.indexOf(u8, _url, "://") orelse 0;
+        if (index != 0)
+            index += 3;
+        return fs.path.dirname(_url[index..]);
+    }
+
+    pub fn url(self: *const Self, allocator: mem.Allocator) !?[]const u8 {
+        const file = self.findDistfile() orelse return null;
+        const host_url = self.findHostUrl() orelse return null;
+        if (mem.indexOf(u8, file.base, "#")) |hash|
+            return try fmt.allocPrint(allocator, "{s}/{s}/archive/{s}{s}", .{ host_url, file.base[0..hash], file.base[hash + 1 ..], file.ext });
+        return try fmt.allocPrint(allocator, "{s}/{s}{s}", .{ host_url, file.base[0..], file.ext });
+    }
+
+    fn entry(contents: []const u8, key: []const u8) ?[]const u8 {
+        const index: usize = mem.indexOf(u8, contents, key) orelse return null;
+        const start: usize = (mem.indexOf(u8, contents[index..], "\"") orelse return null) + index + 1;
+        const end: usize = (mem.indexOf(u8, contents[start..], "\"") orelse return null) + start;
+        return contents[start..end];
     }
 };
 
