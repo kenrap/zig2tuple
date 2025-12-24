@@ -75,12 +75,27 @@ pub const Dependency = struct {
         return fs.path.dirname(_url[index..]);
     }
 
+    fn parseForProject(base: []const u8) struct { name: []const u8, hash: ?[]const u8 } {
+        var name = base;
+        var hash: ?[]const u8 = null;
+        if (mem.indexOf(u8, name, "#")) |i| {
+            name = name[0..i];
+            hash = base[i + 1 ..];
+        }
+        if (mem.indexOf(u8, name, "?")) |i| {
+            name = name[0..i];
+        }
+        return .{ .name = name, .hash = hash };
+    }
+
     pub fn url(self: *const Self, allocator: mem.Allocator) !?[]const u8 {
         const file = self.findDistfile() orelse return null;
+        const project = parseForProject(file.base);
         const host_url = self.findHostUrl() orelse return null;
-        if (mem.indexOf(u8, file.base, "#")) |hash|
-            return try fmt.allocPrint(allocator, "{s}/{s}/archive/{s}{s}", .{ host_url, file.base[0..hash], file.base[hash + 1 ..], file.ext });
-        return try fmt.allocPrint(allocator, "{s}/{s}{s}", .{ host_url, file.base[0..], file.ext });
+        if (project.hash) |hash| {
+            return try fmt.allocPrint(allocator, "{s}/{s}/archive/{s}{s}", .{ host_url, project.name, hash, file.ext });
+        }
+        return try fmt.allocPrint(allocator, "{s}/{s}{s}", .{ host_url, project.name, file.ext });
     }
 
     fn entry(contents: []const u8, key: []const u8) ?[]const u8 {
