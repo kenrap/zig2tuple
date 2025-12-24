@@ -5,29 +5,13 @@ const lib = @import("lib.zig");
 
 test "Dependency Parsing" {
     const alc = testing.allocator;
-    const zon_dep_literal =
-        \\{
-        \\    .one = .{
-        \\        // one
-        \\        .url = "https://some.url.com/one-0.0.1-12345_10.tar.gz",
-        \\        .hash = "one-0.0.1-12345_10",
-        \\        .lazy = true,
-        \\    },
-        \\    .two = .{
-        \\        // two
-        \\        .url = "https://some.url.org/two-67890.tar.bz2",
-        \\        .hash = "two-0.2.0-some_long_hash_two",
-        \\        .lazy = true,
-        \\    },
-        \\    .three = .{
-        \\        // three
-        \\        .url = "https://some.url.net/three-ABCDE.tar.xz",
-        \\        .hash = "three-3.0.0-some_long_hash_three",
-        \\        .lazy = true,
-        \\    },
-        \\}
-    ;
-    var dep_iter = lib.DependencyIterator.init(zon_dep_literal);
+
+    const file = try std.fs.cwd().openFile("src/test_examples/build.zig.zon", .{});
+    defer file.close();
+
+    var dep_iter = try lib.ZonDependencyIterator.init(alc, &file) orelse return error.InvalidExample;
+    defer dep_iter.deinit(alc);
+
     var dep = dep_iter.next() orelse return error.CannotFindDep1;
     var url = try dep.url(alc) orelse return error.NullUrl1;
     var hash = dep.hash orelse return error.NullHash1;

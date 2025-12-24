@@ -1,18 +1,15 @@
 const std = @import("std");
 const fmt = std.fmt;
 const fs = std.fs;
+const json = std.json;
 const mem = std.mem;
+
 const print = std.debug.print;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
 const Dir = std.fs.Dir;
-
-pub const ProjectError = error{
-    MissingDirPathArgument,
-    CannotFindDependencies,
-};
 
 pub const Dependency = struct {
     const Self = @This();
@@ -109,17 +106,28 @@ pub const Dependency = struct {
     }
 };
 
-pub const DependencyIterator = struct {
+pub const ZonDependencyIterator = struct {
     const Self = @This();
 
+    inner_contents: []const u8,
     buffer: []const u8,
     index: usize,
 
-    pub fn init(buffer: []const u8) Self {
+    pub fn init(alc: Allocator, file: *const File) !?Self {
+        const stat = try file.stat();
+        const contents = try file.readToEndAlloc(alc, stat.size);
+        const dep_index = mem.indexOf(u8, contents, ".dependencies") orelse return null;
+        const start = mem.indexOf(u8, contents[dep_index..], "{") orelse return null;
+
         return .{
-            .buffer = buffer[0..],
+            .inner_contents = contents,
+            .buffer = contents[dep_index + start ..],
             .index = 0,
         };
+    }
+
+    pub fn deinit(self: *Self, alc: Allocator) void {
+        alc.free(self.inner_contents);
     }
 
     pub fn next(self: *Self) ?Dependency {
@@ -143,46 +151,97 @@ pub const DependencyIterator = struct {
     }
 };
 
-const ZonFile = union(enum) {
-    orig: File,
-    json: File,
+const ZonJsonValue = struct {
+    name: []const u8,
+    url: []const u8,
+    hash: []const u8,
 };
 
-pub const ZonIterator = struct {
+const ZonJsonMap = std.json.ArrayHashMap(ZonJsonValue);
+const ZonJsonMapIterator = std.StringArrayHashMapUnmanaged(ZonJsonValue).Iterator;
+
+const ZonFile = enum {
+    zon,
+    zon_json,
+};
+
+pub fn parseJson(alc: Allocator, json_file: *const File) !ZonJsonMap {
+    const stat = try json_file.stat();
+    const json_text = try json_file.readToEndAlloc(alc, stat.size);
+    defer alc.free(json_text);
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, alc, json_text, .{});
+    defer parsed.deinit();
+
+    return try ZonJsonMap.jsonParseFromValue(alc, parsed.value, .{});
+}
+
+pub const ZonJsonDependencyIterator = struct {
+    const Self = @This();
+
+    json_zon_map: ZonJsonMap,
+    inner_iter: ZonJsonMapIterator,
+
+    pub fn init(alc: Allocator, file: *const File) !Self {
+        const json_map = try parseJson(alc, file);
+        return .{
+            .json_zon_map = json_map,
+            .inner_iter = json_map.map.iterator(),
+        };
+    }
+
+    pub fn deinit(self: *Self, alc: Allocator) void {
+        self.json_map.deinit(alc);
+    }
+
+    pub fn next(self: *Self) ?Dependency {
+        while (self.inner_iter.next()) |entry| {
+            const value = entry.value_ptr;
+            const dep = Dependency {
+                .name = value.name,
+                .hash = entry.key_ptr.*,
+                ._url = value.url,
+            };
+            return dep;
+        }
+        return null;
+    }
+};
+
+pub const ZonFileIterator = struct {
     const Self = @This();
 
     dir: Dir,
-    _iter: Dir.Walker,
+    inner_iter: Dir.Walker,
+    zon_file: ZonFile,
 
-    pub fn init(alc: Allocator) !Self {
+    pub fn init(alc: Allocator, zon_file: ZonFile) !Self {
         var args = std.process.args();
         _ = args.skip();
-        const path = args.next() orelse return ProjectError.MissingDirPathArgument;
+        const path = args.next() orelse return error.MissingDirPathArgument;
         var dir = try std.fs.cwd().openDir(path, .{});
         return .{
             .dir = dir,
-            ._iter = try dir.walk(alc),
+            .inner_iter = try dir.walk(alc),
+            .zon_file = zon_file,
         };
     }
 
     pub fn deinit(self: *Self) void {
         self.dir.close();
-        self._iter.deinit();
+        self.inner_iter.deinit();
     }
 
-    pub fn next(self: *Self) !?ZonFile {
-        while (try self._iter.next()) |entry| {
+    pub fn next(self: *Self) !?File {
+        while (try self.inner_iter.next()) |entry| {
             if (entry.kind != File.Kind.file)
                 continue;
-            const is_orig = mem.endsWith(u8, entry.path, ".zon");
-            const is_json = mem.endsWith(u8, entry.path, ".zon.json");
-            const file: ?File = if (is_orig or is_json) try self.dir.openFile(entry.path, .{}) else null;
-            if (is_orig) {
-                return ZonFile { .orig = file.? };
-            }
-            else if (is_json) {
-                return ZonFile { .json = file.? };
-            }
+            const ext = switch (self.zon_file) {
+                .zon => ".zon",
+                .zon_json => ".zon.json",
+            };
+            if (mem.endsWith(u8, entry.path, ext))
+                return try self.dir.openFile(entry.path, .{});
         }
         return null;
     }
