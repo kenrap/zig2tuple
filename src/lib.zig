@@ -4,7 +4,10 @@ const fs = std.fs;
 const mem = std.mem;
 const print = std.debug.print;
 
+const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const File = std.fs.File;
+const Dir = std.fs.Dir;
 
 pub const ProjectError = error{
     MissingDirPathArgument,
@@ -88,14 +91,14 @@ pub const Dependency = struct {
         return .{ .name = name, .hash = hash };
     }
 
-    pub fn url(self: *const Self, allocator: mem.Allocator) !?[]const u8 {
+    pub fn url(self: *const Self, alc: Allocator) !?[]const u8 {
         const file = self.findDistfile() orelse return null;
         const project = parseForProject(file.base);
         const host_url = self.findHostUrl() orelse return null;
         if (project.hash) |hash| {
-            return try fmt.allocPrint(allocator, "{s}/{s}/archive/{s}{s}", .{ host_url, project.name, hash, file.ext });
+            return try fmt.allocPrint(alc, "{s}/{s}/archive/{s}{s}", .{ host_url, project.name, hash, file.ext });
         }
-        return try fmt.allocPrint(allocator, "{s}/{s}{s}", .{ host_url, project.name, file.ext });
+        return try fmt.allocPrint(alc, "{s}/{s}{s}", .{ host_url, project.name, file.ext });
     }
 
     fn entry(contents: []const u8, key: []const u8) ?[]const u8 {
@@ -143,17 +146,17 @@ pub const DependencyIterator = struct {
 pub const ZonIterator = struct {
     const Self = @This();
 
-    dir: fs.Dir,
-    _iter: fs.Dir.Walker,
+    dir: Dir,
+    _iter: Dir.Walker,
 
-    pub fn init(allocator: mem.Allocator) !Self {
+    pub fn init(alc: Allocator) !Self {
         var args = std.process.args();
         _ = args.skip();
         const path = args.next() orelse return ProjectError.MissingDirPathArgument;
         var dir = try std.fs.cwd().openDir(path, .{});
         return .{
             .dir = dir,
-            ._iter = try dir.walk(allocator),
+            ._iter = try dir.walk(alc),
         };
     }
 
@@ -162,9 +165,9 @@ pub const ZonIterator = struct {
         self._iter.deinit();
     }
 
-    pub fn next(self: *Self) !?fs.File {
+    pub fn next(self: *Self) !?File {
         while (try self._iter.next()) |entry| {
-            if (entry.kind != std.fs.File.Kind.file)
+            if (entry.kind != File.Kind.file)
                 continue;
             if (!mem.eql(u8, fs.path.extension(entry.path), ".zon"))
                 continue;
