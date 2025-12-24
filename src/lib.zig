@@ -143,6 +143,11 @@ pub const DependencyIterator = struct {
     }
 };
 
+const ZonFile = union(enum) {
+    orig: File,
+    json: File,
+};
+
 pub const ZonIterator = struct {
     const Self = @This();
 
@@ -165,13 +170,19 @@ pub const ZonIterator = struct {
         self._iter.deinit();
     }
 
-    pub fn next(self: *Self) !?File {
+    pub fn next(self: *Self) !?ZonFile {
         while (try self._iter.next()) |entry| {
             if (entry.kind != File.Kind.file)
                 continue;
-            if (!mem.eql(u8, fs.path.extension(entry.path), ".zon"))
-                continue;
-            return try self.dir.openFile(entry.path, .{});
+            const is_orig = mem.endsWith(u8, entry.path, ".zon");
+            const is_json = mem.endsWith(u8, entry.path, ".zon.json");
+            const file: ?File = if (is_orig or is_json) try self.dir.openFile(entry.path, .{}) else null;
+            if (is_orig) {
+                return ZonFile { .orig = file.? };
+            }
+            else if (is_json) {
+                return ZonFile { .json = file.? };
+            }
         }
         return null;
     }
