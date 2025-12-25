@@ -1,0 +1,33 @@
+---
+
+name: CI
+"on": [push, pull_request]
+
+env:
+  ZIG_VERSION: 0.15.2
+
+jobs:
+  test:
+    name: Test
+    strategy:
+      matrix:
+        os: [ubuntu, macos]
+        mode: ["fast", "safe", "small", "off"]
+
+    runs-on: ${{ matrix.os }}-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Build
+        run: zig build --release=${{ matrix.mode }} --verbose --summary all
+
+      - name: Test
+        run: zig build test --release=${{ matrix.mode }} --summary all
