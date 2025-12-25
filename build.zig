@@ -16,4 +16,19 @@ pub fn build(b: *std.Build) void {
     const run_exe = b.addRunArtifact(exe);
     const run_step = b.step("run", "Run the application");
     run_step.dependOn(&run_exe.step);
+
+    const test_mod = b.addModule("test-mod", .{
+        .root_source_file = b.path("src/test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const tests = b.addTest(.{
+        .root_module = test_mod,
+        .use_llvm = true, //temp
+    });
+
+    const run_tests = b.addRunArtifact(tests);
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_tests.step);
 }
