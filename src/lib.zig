@@ -85,18 +85,6 @@ pub const Dependency = struct {
         return try fmt.allocPrint(alc, "{s}/{s}{s}", .{ host_url, name, ext });
     }
 
-    fn findKeyIndex(contents: []const u8, key: []const u8) ?usize {
-        const key_index: usize = mem.indexOf(u8, contents, key) orelse return null;
-        if (mem.lastIndexOf(u8, contents[0..key_index], "\n")) |line_begin| {
-            if (mem.indexOf(u8, contents[line_begin..key_index], "//")) |_| {
-                if (mem.indexOf(u8, contents[key_index..], "\n")) |line_end| {
-                    return findKeyIndex(contents[key_index + line_end + 1..], key);
-                }
-            }
-        }
-        return key_index;
-    }
-
     fn findKey(contents: []const u8, key: []const u8) ?[]const u8 {
         const index: usize = mem.indexOf(u8, contents, key) orelse return null;
         if (mem.lastIndexOf(u8, contents[0..index], "\n")) |line_begin| {
