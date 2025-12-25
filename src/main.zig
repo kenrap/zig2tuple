@@ -11,42 +11,24 @@ pub fn main() !void {
     defer arena.deinit();
     const alc = arena.allocator();
 
-    var lines = try ArrayList([]const u8).initCapacity(alc, 32);
-    defer lines.deinit(alc);
-
-    var zon_json_iter = try lib.ZonFileIterator.init(alc, .zon_json);
-    defer zon_json_iter.deinit();
-
-    var zon_iter = try lib.ZonFileIterator.init(alc, .zon);
+    var zon_iter = try lib.ZonFileIterator.init(alc);
     defer zon_iter.deinit();
 
     var deps = try std.ArrayList(lib.Dependency).initCapacity(alc, 8);
     defer deps.deinit(alc);
 
-    // Detecting .zon.json files first because they seem to have consistent
-    // dependency data (such as the commit hashes) than .zon files
-    while (try zon_json_iter.next()) |file| {
-        var dep_iter = try lib.ZonJsonDependencyIterator.init(alc, &file);
-        while (dep_iter.next()) |dep| {
-            try deps.append(alc, dep);
-        }
-    }
     while (try zon_iter.next()) |file| {
         var dep_iter = try lib.ZonDependencyIterator.init(alc, &file) orelse continue;
         while (dep_iter.next()) |dep| {
-            for (deps.items) |existing_dep| {
-                const hash = dep.hash orelse continue;
-                const existing_hash = existing_dep.hash orelse continue;
-                if (mem.eql(u8, hash, existing_hash)) {
-                    continue;
-                }
-            }
             try deps.append(alc, dep);
         }
     }
 
+    var lines = try ArrayList([]const u8).initCapacity(alc, 16);
+    defer lines.deinit(alc);
+
     for (deps.items) |dep| {
-        const url = try dep.url(alc) orelse continue;
+        const url = try dep.formatUrl(alc) orelse continue;
         const hash = dep.hash orelse continue;
         defer alc.free(url);
         const line = try fmt.allocPrint(alc, "{s}:{s}:{s}", .{ dep.name, url, hash });

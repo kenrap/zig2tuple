@@ -1,7 +1,17 @@
 const std = @import("std");
 const testing = std.testing;
 
+const Allocator = std.mem.Allocator;
+
 const lib = @import("lib.zig");
+
+fn expectDep(alc: Allocator, dep: lib.Dependency, url: []const u8, hash: []const u8) !void {
+    const format_url = try dep.formatUrl(alc) orelse return error.UrlNotFound;
+    const dep_hash = dep.hash orelse return error.HashNotFound;
+    try testing.expectEqualStrings(url, format_url);
+    try testing.expectEqualStrings(hash, dep_hash);
+    alc.free(format_url);
+}
 
 test "Dependency Parsing" {
     const alc = testing.allocator;
@@ -13,23 +23,14 @@ test "Dependency Parsing" {
     defer dep_iter.deinit(alc);
 
     var dep = dep_iter.next() orelse return error.CannotFindDep1;
-    var url = try dep.url(alc) orelse return error.NullUrl1;
-    var hash = dep.hash orelse return error.NullHash1;
-    try testing.expectEqualStrings(url, "some.url.com/one-0.0.1-12345_10.tar.gz");
-    try testing.expectEqualStrings(hash, "one-0.0.1-12345_10");
-    alc.free(url);
+    try expectDep(alc, dep,
+        "github.com/foo2/bar/archive/012345689abcdef0123456789abcdef012345678.tar.gz",
+        "bar-0.0.0-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopq",
+    );
 
     dep = dep_iter.next() orelse return error.CannotFindDep2;
-    url = try dep.url(alc) orelse return error.NullUrl2;
-    hash = dep.hash orelse return error.NullHash2;
-    try testing.expectEqualStrings(url, "some.url.org/two-67890.tar.bz2");
-    try testing.expectEqualStrings(hash, "two-0.2.0-some_long_hash_two");
-    alc.free(url);
-
-    dep = dep_iter.next() orelse return error.CannotFindDep3;
-    url = try dep.url(alc) orelse return error.NullUrl3;
-    hash = dep.hash orelse return error.NullHash3;
-    try testing.expectEqualStrings(url, "some.url.net/three-ABCDE.tar.xz");
-    try testing.expectEqualStrings(hash, "three-3.0.0-some_long_hash_three");
-    alc.free(url);
+    try expectDep(alc, dep,
+        "one.two/three/four/archive/012345689abcdef0123456789abcdef012345678.tar.gz",
+        "four-0.0.0-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopq",
+    );
 }

@@ -1,20 +1,25 @@
-.dependencies = {
-    .one = .{
-        // one
-        .url = "https://some.url.com/one-0.0.1-12345_10.tar.gz",
-        .hash = "one-0.0.1-12345_10",
-        .lazy = true,
+.{
+    .name = .foo,
+    .fingerprint = 0x0123456789abcdef,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.0.0",
+    .dependencies = .{
+        .foo = .{
+            // Comment: .url = "git+https://github.com/foo/bar",
+            .url = "https://github.com/foo2/bar/archive/012345689abcdef0123456789abcdef012345678.tar.gz",
+            .hash = "bar-0.0.0-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopq",
+            .lazy = true,
+        },
+        .bar = .{
+            // Comment: https://one.two/three/four/
+            .url = "https://one.two/three/four/archive/012345689abcdef0123456789abcdef012345678.tar.gz",
+            .hash = "four-0.0.0-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopq",
+        },
     },
-    .two = .{
-        // two
-        .url = "https://some.url.org/two-67890.tar.bz2",
-        .hash = "two-0.2.0-some_long_hash_two",
-        .lazy = true,
-    },
-    .three = .{
-        // three
-        .url = "https://some.url.net/three-ABCDE.tar.xz",
-        .hash = "three-3.0.0-some_long_hash_three",
-        .lazy = true,
+    .paths = .{
+        "LICENSE",
+        "build.zig",
+        "build.zig.zon",
+        "src",
     },
 }
