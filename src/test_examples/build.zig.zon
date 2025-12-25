@@ -15,6 +15,10 @@
             .url = "https://one.two/three/four/archive/012345689abcdef0123456789abcdef012345678.tar.gz",
             .hash = "four-0.0.0-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopq",
         },
+        .zoot = .{
+            .url = "https://one.two/three/four/archive/CaseSensitive-Dep.tar.gz",
+            .hash = "four-0.1.0-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopq",
+        },
     },
     .paths = .{
         "LICENSE",

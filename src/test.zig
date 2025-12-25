@@ -23,14 +23,26 @@ test "Dependency Parsing" {
     defer dep_iter.deinit(alc);
 
     var dep = dep_iter.next() orelse return error.CannotFindDep1;
-    try expectDep(alc, dep,
+    try expectDep(
+        alc,
+        dep,
         "github.com/foo2/bar/archive/012345689abcdef0123456789abcdef012345678.tar.gz",
         "bar-0.0.0-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopq",
     );
 
     dep = dep_iter.next() orelse return error.CannotFindDep2;
-    try expectDep(alc, dep,
+    try expectDep(
+        alc,
+        dep,
         "one.two/three/four/archive/012345689abcdef0123456789abcdef012345678.tar.gz",
         "four-0.0.0-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopq",
+    );
+
+    dep = dep_iter.next() orelse return error.CannotFindDep3;
+    try expectDep(
+        alc,
+        dep,
+        "one.two/three/four/archive/CaseSensitive-Dep.tar.gz",
+        "four-0.1.0-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopq",
     );
 }
