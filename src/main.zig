@@ -18,6 +18,7 @@ pub fn main() !void {
     defer deps.deinit(alc);
 
     while (try zon_iter.next()) |file| {
+        defer file.close();
         var dep_iter = try lib.ZonDependencyIterator.init(alc, &file) orelse continue;
         while (dep_iter.next()) |dep| {
             try deps.append(alc, dep);
