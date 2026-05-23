@@ -4,8 +4,11 @@ const fs = std.fs;
 const mem = std.mem;
 
 const Allocator = std.mem.Allocator;
-const File = std.fs.File;
-const Dir = std.fs.Dir;
+const Args = std.process.Args;
+
+const Io = std.Io;
+const File = Io.File;
+const Dir = Io.Dir;
 
 const print = std.debug.print;
 
@@ -122,9 +125,10 @@ pub const ZonDependencyIterator = struct {
     buffer: []const u8,
     index: usize,
 
-    pub fn init(alc: Allocator, file: *const File) !?Self {
-        const stat = try file.stat();
-        const contents = try file.readToEndAlloc(alc, stat.size);
+    pub fn init(alc: Allocator, file: *const File, io: Io) !?Self {
+        const stat = try file.stat(io);
+        var file_reader = file.reader(io, &.{});
+        const contents = try file_reader.interface.allocRemaining(alc, .limited(stat.size + 1));
         const dep_index = mem.indexOf(u8, contents, ".dependencies") orelse return null;
         const start = mem.indexOf(u8, contents[dep_index..], "{") orelse return null;
 
@@ -166,28 +170,28 @@ pub const ZonFileIterator = struct {
     dir: Dir,
     inner_iter: Dir.Walker,
 
-    pub fn init(alc: Allocator) !Self {
-        var args = std.process.args();
-        _ = args.skip();
-        const path = args.next() orelse return error.MissingDirPathArgument;
-        var dir = try std.fs.cwd().openDir(path, .{});
+    pub fn init(alc: Allocator, args: Args, io: Io) !Self {
+        var args_iter = args.iterate();
+        _ = args_iter.skip();
+        const path = args_iter.next() orelse return error.MissingDirPathArgument;
+        var dir = try Dir.cwd().openDir(io, path, .{ .iterate = true });
         return .{
             .dir = dir,
             .inner_iter = try dir.walk(alc),
         };
     }
 
-    pub fn deinit(self: *Self) void {
-        self.dir.close();
+    pub fn deinit(self: *Self, io: Io) void {
+        self.dir.close(io);
         self.inner_iter.deinit();
     }
 
-    pub fn next(self: *Self) !?File {
-        while (try self.inner_iter.next()) |entry| {
+    pub fn next(self: *Self, io: Io) !?File {
+        while (try self.inner_iter.next(io)) |entry| {
             if (entry.kind != File.Kind.file)
                 continue;
             if (mem.endsWith(u8, entry.path, ".zon"))
-                return try self.dir.openFile(entry.path, .{});
+                return try self.dir.openFile(io, entry.path, .{});
         }
         return null;
     }

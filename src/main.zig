@@ -1,25 +1,25 @@
 const std = @import("std");
 const fmt = std.fmt;
-const fs = std.fs;
+const File = std.Io.File;
 const mem = std.mem;
 const ArrayList = std.ArrayList;
 
 const lib = @import("lib.zig");
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const alc = arena.allocator();
+pub fn main(init: std.process.Init) !void {
+    const alc = init.arena.allocator();
+    const args = init.minimal.args;
+    const io = init.io;
 
-    var zon_iter = try lib.ZonFileIterator.init(alc);
-    defer zon_iter.deinit();
+    var zon_iter = try lib.ZonFileIterator.init(alc, args, io);
+    defer zon_iter.deinit(io);
 
     var deps = try std.ArrayList(lib.Dependency).initCapacity(alc, 8);
     defer deps.deinit(alc);
 
-    while (try zon_iter.next()) |file| {
-        defer file.close();
-        var dep_iter = try lib.ZonDependencyIterator.init(alc, &file) orelse continue;
+    while (try zon_iter.next(io)) |file| {
+        defer file.close(io);
+        var dep_iter = try lib.ZonDependencyIterator.init(alc, &file, io) orelse continue;
         while (dep_iter.next()) |dep| {
             try deps.append(alc, dep);
         }
@@ -43,7 +43,7 @@ pub fn main() !void {
 
     mem.sort([]const u8, lines.items, {}, lib.stringLessThan);
     var stdout_buffer: [1024 * 8]u8 = undefined;
-    var stdout_writer = fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = File.stdout().writer(io, &stdout_buffer);
     var stdout = &stdout_writer.interface;
     try stdout.print("ZIG_TUPLE=\t{s}", .{lines.items[0]});
     for (lines.items[1..]) |line| {

@@ -2,6 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 
 const Allocator = std.mem.Allocator;
+const Dir = std.Io.Dir;
 
 const lib = @import("lib.zig");
 
@@ -15,11 +16,12 @@ fn expectDep(alc: Allocator, dep: lib.Dependency, url: []const u8, hash: []const
 
 test "Dependency Parsing" {
     const alc = testing.allocator;
+    const io = testing.io;
 
-    const file = try std.fs.cwd().openFile("src/test_examples/build.zig.zon", .{});
-    defer file.close();
+    const file = try Dir.cwd().openFile(io, "src/test_examples/build.zig.zon", .{});
+    defer file.close(io);
 
-    var dep_iter = try lib.ZonDependencyIterator.init(alc, &file) orelse return error.InvalidExample;
+    var dep_iter = try lib.ZonDependencyIterator.init(alc, &file, io) orelse return error.InvalidExample;
     defer dep_iter.deinit(alc);
 
     var dep = dep_iter.next() orelse return error.CannotFindDep1;
