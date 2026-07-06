@@ -2,26 +2,23 @@ const std = @import("std");
 const testing = std.testing;
 
 const Allocator = std.mem.Allocator;
-const Dir = std.Io.Dir;
 
 const lib = @import("lib.zig");
 
+const example_zon = @embedFile("test_examples/build.zig.zon");
+
 fn expectDep(alc: Allocator, dep: lib.Dependency, url: []const u8, hash: []const u8) !void {
     const format_url = try dep.formatUrl(alc) orelse return error.UrlNotFound;
+    defer alc.free(format_url);
     const dep_hash = dep.hash orelse return error.HashNotFound;
     try testing.expectEqualStrings(url, format_url);
     try testing.expectEqualStrings(hash, dep_hash);
-    alc.free(format_url);
 }
 
 test "Dependency Parsing" {
     const alc = testing.allocator;
-    const io = testing.io;
 
-    const file = try Dir.cwd().openFile(io, "src/test_examples/build.zig.zon", .{});
-    defer file.close(io);
-
-    var dep_iter = try lib.ZonDependencyIterator.init(alc, &file, io) orelse return error.InvalidExample;
+    var dep_iter = try lib.ZonDependencyIterator.init(alc, example_zon, null) orelse return error.InvalidExample;
     defer dep_iter.deinit(alc);
 
     var dep = dep_iter.next() orelse return error.CannotFindDep1;
